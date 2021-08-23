@@ -52,11 +52,18 @@
 #include "wiced_bt_ble.h"
 #include "wiced_bt_gatt.h"
 #include "wiced_bt_gatt.h"
+
+#ifdef COMPONENT_FREERTOS
 #include <FreeRTOS.h>
 #include <task.h>
 #include <queue.h>
 #include <string.h>
 #include <timers.h>
+#endif
+
+#if (FEATURE_ABSTRACTION_RTOS == ENABLE_FEATURE)
+#include <stdlib.h>
+#endif
 
 /*******************************************************************************
  *                              FUNCTION DECLARATIONS
@@ -597,7 +604,11 @@ int32_t app_get_attr_index_by_handle(uint16_t attr_handle)
  ******************************************************************************/
 static void app_free_buffer(uint8_t *p_buf)
 {
+#if (FEATURE_ABSTRACTION_RTOS == ENABLE_FEATURE)
+    free(p_buf);
+#else
     vPortFree(p_buf);
+#endif
 }
 
 
@@ -614,7 +625,11 @@ static void app_free_buffer(uint8_t *p_buf)
  ******************************************************************************/
 static void* app_alloc_buffer(int len)
 {
+#if (FEATURE_ABSTRACTION_RTOS == ENABLE_FEATURE)
+    return malloc(len);
+#else
     return pvPortMalloc(len);
+#endif
 }
 
 /* [] END OF FILE */

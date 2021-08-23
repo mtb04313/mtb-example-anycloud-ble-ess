@@ -50,12 +50,23 @@
 #include "cyhal.h"
 #include "cyhal_gpio.h"
 #include "stdio.h"
+
+#include "cy_feature.h"
+#include "cy_debug.h"
+
+#if (FEATURE_ABSTRACTION_RTOS == ENABLE_FEATURE)
 #include "cyabs_rtos.h"
-#include <FreeRTOS.h>
-#include <task.h>
-#include <queue.h>
-#include <string.h>
-#include <timers.h>
+
+#else
+    #ifdef COMPONENT_FREERTOS
+    #include <FreeRTOS.h>
+    #include <task.h>
+    #include <queue.h>
+    #include <string.h>
+    #include <timers.h>
+    #endif
+#endif
+
 #include "GeneratedSource/cycfg_gatt_db.h"
 #include "app_bt_gatt_handler.h"
 #include "app_bt_utils.h"
@@ -102,22 +113,32 @@
 /* Configuring Higher priority for the application */
 volatile int uxTopUsedPriority;
 
+#if (FEATURE_BLE == ENABLE_FEATURE)
 /* Manages runtime configuration of Bluetooth stack */
 extern const wiced_bt_cfg_settings_t wiced_bt_cfg_settings;
 
 /* Timer to handle streaming start and stop */
+#if (FEATURE_ABSTRACTION_RTOS == ENABLE_FEATURE)
+static cy_timer_t seconds_timer_h;
+#else
 static TimerHandle_t seconds_timer_h;
+#endif
+
 
 /* Status variable for connection ID */
 uint16_t app_bt_conn_id;
+#endif
 
 /* Dummy Room Temperature */
 int16_t temperature = DEFAULT_TEMPERATURE;
 uint8_t alternating_flag = 0;
 
+
 /*******************************************************************************
  *        Function Prototypes
  *******************************************************************************/
+
+#if (FEATURE_BLE == ENABLE_FEATURE)
 
 /* Callback function for Bluetooth stack management type events */
 static wiced_bt_dev_status_t
@@ -131,10 +152,15 @@ static wiced_result_t app_bt_set_advertisement_data(void);
 static void bt_app_init(void);
 
 /* This is a timer invoked callback function that is invoked in every timeout */
+#if (FEATURE_ABSTRACTION_RTOS == ENABLE_FEATURE)
+static void seconds_timer_temperature_cb(cy_timer_callback_arg_t cb_params);
+#else
 static void seconds_timer_temperature_cb(TimerHandle_t cb_params);
+#endif
 
 /* This function starts the advertisements */
 static void app_start_advertisement(void);
+#endif
 
 /******************************************************************************
  *                          Function Definitions
@@ -145,14 +171,8 @@ static void app_start_advertisement(void);
  *  stack initialization.  The actual application initialization will happen
  *  when stack reports that BT device is ready.
  */
-int main(void)
+int main_thread(void)
 {
-    uxTopUsedPriority = configMAX_PRIORITIES - 1;
-    wiced_result_t wiced_result;
-
-    /* Initialize and Verify the BSP initialization */
-    CY_ASSERT(CY_RSLT_SUCCESS == cybsp_init());
-
     /* Enable global interrupts */
     __enable_irq();
 
@@ -161,11 +181,20 @@ int main(void)
                         CYBSP_DEBUG_UART_RX,
                         CY_RETARGET_IO_BAUDRATE);
 
-    /* Initialising the HCI UART for Host contol */
-    cybt_platform_config_init(&cybsp_bt_platform_cfg);
 
     /* Debug logs on UART port */
     printf("**********AnyCloud Example*****************\n");
+
+#if (FEATURE_BLE == ENABLE_FEATURE)
+    wiced_result_t wiced_result;
+
+    // for BT debugging
+    //cybt_platform_set_trace_level(CYBT_TRACE_ID_ALL,      //cybt_trace_id_t id,
+    //                              CYBT_TRACE_LEVEL_MAX);  //cybt_trace_level_t level
+
+    /* Initialising the HCI UART for Host contol */
+    cybt_platform_config_init(&cybsp_bt_platform_cfg);
+
 
     printf("****** Environmental Sensing Service ******\n");
 
@@ -179,14 +208,52 @@ int main(void)
     } else {
         printf("Bluetooth Stack Initialization failed!!\n");
     }
+#endif
+
+    return 0;
+}
+
+
+int main(void)
+{
+#ifdef COMPONENT_FREERTOS
+    int result;
+
+    uxTopUsedPriority = configMAX_PRIORITIES - 1;
+
+    if (CY_RSLT_SUCCESS != cybsp_init()) {
+        CY_ASSERT(0);
+    }
+
+    result = main_thread();
 
     /* Start the FreeRTOS scheduler */
     vTaskStartScheduler();
 
     /* Should never get here */
     CY_ASSERT(0);
+
+    return result;
+
+#elif defined COMPONENT_RTTHREAD
+    extern int entry(void);
+
+    static bool initialized = false;
+
+    uxTopUsedPriority = RT_THREAD_PRIORITY_MAX - 1 ;
+
+    if (!initialized) {
+        initialized = true;
+        return entry();
+    }
+    else {
+        return main_thread();
+    }
+#endif
 }
 
+
+#if (FEATURE_BLE == ENABLE_FEATURE)
 /*
  * Function Name: app_bt_management_callback()
  *
@@ -288,6 +355,21 @@ static void bt_app_init(void)
                     CYHAL_GPIO_DRIVE_STRONG,
                     CYBSP_LED_STATE_OFF);
 
+#if (FEATURE_ABSTRACTION_RTOS == ENABLE_FEATURE)
+
+#if (POLL_TIMER_IN_MSEC > 0)
+    cy_rslt_t result = cy_rtos_init_timer(&seconds_timer_h,             //cy_timer_t* timer,
+                                          CY_TIMER_TYPE_PERIODIC,       //cy_timer_trigger_type_t type,
+                                          seconds_timer_temperature_cb, //cy_timer_callback_t fun,
+                                          0);                           //cy_timer_callback_arg_t arg)
+
+    if (result != CY_RSLT_SUCCESS) {
+        printf("Temperature sensing timer Initialization has failed! \n");
+        CY_ASSERT(0);
+    }
+#endif
+
+#else
     seconds_timer_h = xTimerCreate("Seconds Timer",
                                     POLL_TIMER_IN_MSEC,
                                     pdTRUE,
@@ -299,11 +381,27 @@ static void bt_app_init(void)
         printf("Temperature sensing timer Initialization has failed! \n");
         CY_ASSERT(0);
     }
+#endif
 
+
+#if (FEATURE_ABSTRACTION_RTOS == ENABLE_FEATURE)
+
+#if (POLL_TIMER_IN_MSEC > 0)
+    result = cy_rtos_start_timer( &seconds_timer_h,     //cy_timer_t* timer,
+                                  POLL_TIMER_IN_MSEC);  //cy_time_t num_ms)
+
+    if (result != CY_RSLT_SUCCESS) {
+        printf("Failed to start audio timer!\n");
+        CY_ASSERT(0);
+    }
+#endif
+
+#else
     if (pdPASS != xTimerStart(seconds_timer_h, 20u)) {
         printf("Failed to start audio timer!\n");
         CY_ASSERT(0);
     }
+#endif
 
     /* Initialize GATT Database */
     gatt_status = wiced_bt_gatt_db_init(gatt_database, gatt_database_len, NULL);
@@ -313,7 +411,6 @@ static void bt_app_init(void)
 
     /* Start Bluetooth LE advertisements */
     app_start_advertisement();
-
 }
 
 
@@ -377,9 +474,12 @@ static wiced_result_t app_bt_set_advertisement_data(void)
 
  @return void
  */
+#if (FEATURE_ABSTRACTION_RTOS == ENABLE_FEATURE)
+static void seconds_timer_temperature_cb(cy_timer_callback_arg_t cb_params)
+#else
 static void seconds_timer_temperature_cb(TimerHandle_t cb_params)
+#endif
 {
-
     /* Varying temperature by 1 degree on every timeout for simulation */
     if (0 == alternating_flag) {
         temperature += DELTA_TEMPERATURE;
@@ -439,5 +539,6 @@ static void seconds_timer_temperature_cb(TimerHandle_t cb_params)
 
     }
 }
+#endif
 
 /* [] END OF FILE */

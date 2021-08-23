@@ -67,7 +67,9 @@ VERBOSE=
 # ... then code in directories named COMPONENT_foo and COMPONENT_bar will be
 # added to the build
 #
-COMPONENTS= FREERTOS WICED_BLE
+#RTOS= FREERTOS
+RTOS= RTTHREAD
+COMPONENTS= $(RTOS) WICED_BLE
 
 # Like COMPONENTS, but disable optional code that was enabled by default.
 DISABLE_COMPONENTS=
@@ -104,7 +106,7 @@ CXXFLAGS=
 #
 # NOTE: Includes and defines should use the INCLUDES and DEFINES variable
 # above.
-ASFLAGS=
+ASFLAGS=-Wa,-mimplicit-it=always
 
 # Additional / custom linker flags.
 LDFLAGS=
@@ -116,7 +118,7 @@ LDLIBS=
 LINKER_SCRIPT=
 
 # Custom pre-build commands to run.
-PREBUILD=
+PREBUILD=cp -a .cyignore.$(RTOS) .cyignore
 
 # Custom post-build commands to run.
 POSTBUILD=
