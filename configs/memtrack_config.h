@@ -1,7 +1,7 @@
 /*******************************************************************************
-* File Name: cy_feature.h
+* File Name: memtrack_config.h
 *
-* Description: This file defines whether features are enabled / disabled
+* Description: This file defines memory-tracking configuration parameters
 *
 * Related Document: See README.md
 *
@@ -39,8 +39,8 @@
  so agrees to indemnify Cypress against all liability.
 *******************************************************************************/
 
-#ifndef __CY_FEATURE_H__
-#define __CY_FEATURE_H__
+#ifndef SOURCE_MEMTRACK_CONFIG_H_
+#define SOURCE_MEMTRACK_CONFIG_H_
 
 #ifdef __cplusplus
 extern "C"
@@ -50,17 +50,13 @@ extern "C"
 
 /*-- Public Definitions -------------------------------------------------*/
 
-#define ENABLE_FEATURE      1
-#define DISABLE_FEATURE     2
-
-#define FEATURE_BLE                 ENABLE_FEATURE
-
-#define FEATURE_ABSTRACTION_RTOS    ENABLE_FEATURE
+/* whether to enable or disable memory-tracking */
+#define USE_CY_MEMTRACK         1   /* 1=enable, 0=disable */
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif      /* __CY_FEATURE_H__ */
+#endif      /* SOURCE_MEMTRACK_CONFIG_H_ */
 
 /* [] END OF FILE */

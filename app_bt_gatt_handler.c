@@ -44,6 +44,7 @@
 /* *****************************************************************************
  *                              INCLUDES
  * ****************************************************************************/
+#include "feature_config.h"
 #include "app_bt_gatt_handler.h"
 #include "app_bt_utils.h"
 #include "GeneratedSource/cycfg_gatt_db.h"

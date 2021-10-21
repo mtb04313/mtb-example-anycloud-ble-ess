@@ -51,7 +51,7 @@
 #include "cyhal_gpio.h"
 #include "stdio.h"
 
-#include "cy_feature.h"
+#include "feature_config.h"
 #include "cy_debug.h"
 
 #if (FEATURE_ABSTRACTION_RTOS == ENABLE_FEATURE)
